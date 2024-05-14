@@ -1,19 +1,15 @@
 <script>
-  import ArrayDisplay from "./ArrayDisplay.svelte";
-  import Timeline from "./Timeline.svelte";
-
   import {
-    Add,
-    TrashOutline,
     Play,
     Pause,
     PlayForwardSharp,
     PlayBackSharp,
   } from "svelte-ionicons";
 
-  import { flip } from "svelte/animate";
-  import { slide } from "svelte/transition";
-  import CircleProgressBar from "./CircleProgressBar.svelte";
+  import { fade } from "svelte/transition";
+
+  import ArrayDisplay from "./ArrayDisplay.svelte";
+  import Timeline from "./Timeline.svelte";
 
   /** @type {import('./types.d.ts').Element[]} */
   let original = [];
@@ -33,9 +29,9 @@
 
   /** @type {('play' | 'pause')} */
   let playbackState = "pause";
-
-  $: {
-  }
+  let playInterval = null;
+  let playProgress = 0;
+  let playProgressRequest = null;
 
   const generateTimeline = () => {
     timeline = [];
@@ -45,6 +41,14 @@
     timelineLow = 0;
     timelineHigh = original.length - 1;
     timelineStep = 0;
+    timeline.push({
+      state: original,
+      low: 0,
+      high: original.length - 1,
+      pivot: null,
+      description: null,
+      kind: "select",
+    });
     randSelect(original, 0, original.length - 1, selectedElement);
   };
 
@@ -72,9 +76,23 @@
   };
 
   const play = () => {
+    if (timeline.length == 0) {
+      return;
+    }
+
+
     if (playbackState == "pause") {
+      playInterval = setInterval(() => {
+        takeStepForward();
+        if (timelineStep == timeline.length - 1) {
+          play();
+        }
+      }, 1500);
       playbackState = "play";
     } else {
+      clearInterval(playInterval);
+      playProgressRequest = null;
+      playInterval = null;
       playbackState = "pause";
     }
   };
@@ -82,30 +100,63 @@
   const partition = (arr, low, high) => {
     const pivotIndex = Math.floor(Math.random() * (high - low) + low);
     timeline.push({
-      state: arr,
+      state: [...arr],
       low,
-      high: pivotIndex - 1,
+      high,
       pivot: pivotIndex,
-      description:
-        "The element we are searching for is on the left side of the pivot",
+      description: "Partitioning around index " + pivotIndex,
       kind: "partition",
     });
     if (low > high) {
       throw Error("low > high");
     }
 
+    const origLow = low;
     [arr[pivotIndex], arr[high]] = [arr[high], arr[pivotIndex]];
 
-    for (let j = low; j < high; j++) {
-      if (arr[j].value > arr[high].value) {
-        continue;
-      }
+    timeline.push({
+      state: [...arr],
+      low: origLow,
+      high,
+      pivot: high,
+      description: "Swap pivot with index " + high,
+      kind: "partition",
+    });
 
-      [arr[low], arr[j]] = [arr[j], arr[low]];
-      low += 1;
+    for (let j = low; j < high; j++) {
+      if (arr[j].value <= arr[high].value) {
+        timeline.push({
+          state: [...arr],
+          low: origLow,
+          high,
+          pivot: high,
+          description: "Swap index " + low + " with index " + j,
+          kind: "partition",
+        });
+        [arr[low], arr[j]] = [arr[j], arr[low]];
+        low += 1;
+
+        timeline.push({
+          state: [...arr],
+          low: origLow,
+          high,
+          pivot: high,
+          description: null,
+          kind: "partition",
+        });
+      }
     }
 
     [arr[low], arr[high]] = [arr[high], arr[low]];
+
+    timeline.push({
+      state: [...arr],
+      low: origLow,
+      high,
+      pivot: low,
+      description: "Place pivot in the correct index",
+      kind: "partition",
+    });
     return low;
   };
 
@@ -128,6 +179,7 @@
       return;
     }
     changeTimepoint(timelineStep + 1);
+    playProgress = 0;
   };
 
   const takeStepBackward = () => {
@@ -135,6 +187,7 @@
       return;
     }
     changeTimepoint(timelineStep - 1);
+    playProgress = 0;
   };
 
   const randSelect = (arr, low, high, n) => {
@@ -159,8 +212,8 @@
       low,
       high,
       pivot: q,
-      description: "Partitioned around " + q,
-      kind: "select",
+      description: "Middle index is " + q,
+      kind: "partition",
     });
 
     const k = q - low + 1;
@@ -192,7 +245,7 @@
     timeline.push({
       state: arr,
       low,
-      high: q - 1,
+      high,
       pivot: q,
       description:
         "The element we are searching for is on the right side of the pivot",
@@ -217,18 +270,24 @@
   };
 </script>
 
-<main>
-  <ArrayDisplay
-    bind:elements
-    bind:selectedElement
-    bind:low={timelineLow}
-    bind:high={timelineHigh}
-    bind:pivot={timelinePivot}
-    on:removeElement={(e) => {
-      removeElement(e.detail);
-    }}
-  ></ArrayDisplay>
-</main>
+<div>
+  {#key timelineDesc}
+    <p class="timeline-description" transition:fade>
+      {timelineDesc ? timelineDesc : ""}
+    </p>
+  {/key}
+</div>
+
+<ArrayDisplay
+  bind:elements
+  bind:selectedElement
+  bind:low={timelineLow}
+  bind:high={timelineHigh}
+  bind:pivot={timelinePivot}
+  on:removeElement={(e) => {
+    removeElement(e.detail);
+  }}
+></ArrayDisplay>
 
 <div class="visualization-container">
   <Timeline
@@ -243,7 +302,7 @@
         <input
           type="range"
           min="0"
-          max="20"
+          max="10"
           step="1"
           value={original.length}
           on:change={onChangeNumElements}
@@ -251,37 +310,35 @@
       </div>
     </div>
     <div class="playback-controls">
-      <PlayBackSharp on:click={takeStepBackward} />
+      <PlayBackSharp on:click={() => {
+        if(playbackState == "pause") takeStepBackward();
+      }} />
       {#if playbackState == "pause"}
         <Play size="36" on:click={play} />
       {:else if playbackState == "play"}
-        <CircleProgressBar>
-          <Pause size="36" on:click={play} />
-        </CircleProgressBar>
+        <Pause size="36" on:click={play} />
       {/if}
-      <PlayForwardSharp on:click={takeStepForward} />
+      <PlayForwardSharp on:click={() => {
+        if(playbackState == "pause") takeStepForward();
+      }} />
     </div>
     <div class="visualization-controls-right">
-      <input
-        type="number"
-        bind:value={selectedElement}
-        min="1"
-        max={original.length}
-        disabled={original.length == 0}
-        on:change={changeSelectedElement}
-      />
+      <div class="selected-element">
+        <span>N-th element to find</span>
+        <input
+          type="number"
+          bind:value={selectedElement}
+          min="1"
+          max={original.length}
+          disabled={original.length == 0}
+          on:change={changeSelectedElement}
+        />
+      </div>
     </div>
   </div>
 </div>
 
 <style lang="scss">
-  main {
-    position: relative;
-    display: flex;
-    place-content: center center;
-    flex-direction: column;
-  }
-
   .btn-add-element {
     position: absolute;
     right: 2rem;
@@ -299,13 +356,9 @@
   .visualization-container {
     display: flex;
     flex-direction: column;
-    justify-items: end;
+    justify-content: end;
 
     padding-bottom: 0.5rem;
-
-    & > * {
-      flex-grow: 1;
-    }
   }
 
   .visualization-controls {
@@ -335,5 +388,17 @@
     display: flex;
     justify-content: center;
     align-items: center;
+  }
+
+  .timeline-description {
+    margin: 0;
+    text-align: center;
+    font-weight: bold;
+    font-size: 2rem;
+  }
+
+  .selected-element {
+    display: flex;
+    flex-direction: column;
   }
 </style>

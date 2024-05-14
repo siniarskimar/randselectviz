@@ -29,7 +29,7 @@ h1 {
 #app {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto 5rem;
+  grid-template-rows: 5rem auto 10rem;
   flex-direction: column;
 }
 

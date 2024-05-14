@@ -7,7 +7,7 @@ export type TimelineKeyframe = {
     state: Element[],
     low: number,
     high: number,
-    pivot: number,
+    pivot: number | null,
     description: string | null,
     kind: 'partition' | 'select' 
 };

@@ -18,7 +18,7 @@
   {#each timeline as tpoint, idx (idx)}
     <button
       class="timeline-point"
-      class:--active={idx == step}
+      class:timeline-point--partition={tpoint.kind == 'partition'}
       style:--scaling={idx == step ? 1.5 : 1}
       animate:flip
       on:click = {() => dispatch('changetimepoint', idx)}
@@ -37,6 +37,11 @@
     align-items: center;
     justify-content: center;
     gap: 0.8rem;
+
+    width: 50%;
+    flex-wrap: wrap;
+
+    align-self: center;
   }
 
   .timeline-point {
@@ -53,5 +58,8 @@
 
     transform: scale(var(--scaling));
     transition: --scaling 250ms ease-in-out;
+  }
+  .timeline-point--partition {
+    background-color: hsla(220, 94%, 52%, 1);
   }
 </style>
