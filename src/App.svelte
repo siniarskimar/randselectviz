@@ -88,6 +88,7 @@
       pivot: pivotIndex,
       description:
         "The element we are searching for is on the left side of the pivot",
+      kind: "partition",
     });
     if (low > high) {
       throw Error("low > high");
